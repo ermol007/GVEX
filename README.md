@@ -4,6 +4,49 @@
 
 ---
 
+## 🚀 QuantFlow Web Application
+
+### Live Demo
+**QuantFlow v5.3** - Interactive Options Analytics Dashboard is now deployed on GitHub Pages!
+
+### Features
+- 📊 **Multi-Horizon Gamma Analysis** - Analyze Short/Mid/Long-DTE exposure
+- 📈 **Interactive Charts** - Plotly-powered visualization with zoom & pan
+- 🎯 **Market Regime Detection** - DIX-based institutional flow analysis  
+- 🔄 **Real-time Calculations** - Client-side processing with Black-Scholes Greeks
+- 📁 **CSV Import** - Support for CBOE SPX options chains + DIX data
+- 💾 **Demo Mode** - Load synthetic data for testing
+
+### Quick Start
+1. **Load Demo Data** - Click "LOAD DEMO DATA" button to see example analysis
+2. **Upload Your Data** - Import CBOE SPX options CSV and DIX CSV files
+3. **Analyze** - Click "INITIALIZE MODEL" to run calculations
+4. **Explore** - Navigate between Horizon Analysis, Greeks Profile, and Data Matrix tabs
+
+### Local Development
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd <repo-name>
+
+# Open in browser (no build step required - pure HTML/JS)
+open index.html
+# or use a local server:
+python -m http.server 8000
+# Then visit http://localhost:8000
+```
+
+### Data Format
+**SPX Options CSV** (CBOE format):
+- Must contain columns: Strike, Gamma (calls & puts), Open Interest, IV, Expiration Date
+- Supports Russian date formats (e.g., "21 ноября 2025 г.")
+
+**DIX CSV** (Squeezemetrics format):
+- Must contain columns: Date, DIX, Price
+- Historical data recommended (60+ days for dynamic thresholds)
+
+---
+
 ## 📋 Метаданные
 
 | Параметр | Значение |

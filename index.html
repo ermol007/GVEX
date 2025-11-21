@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantFlow v5.3 // GVEX Horizon</title>
+    
+    <!-- Tailwind CSS v3 (Stable) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        void: '#020617',
+                        panel: 'rgba(15, 23, 42, 0.6)',
+                        neon: {
+                            blue: '#3b82f6',
+                            cyan: '#06b6d4',
+                            purple: '#a855f7',
+                            emerald: '#10b981',
+                            rose: '#f43f5e',
+                            amber: '#f59e0b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-void: #020617;
+            --grid-line: rgba(255, 255, 255, 0.03);
+        }
+
+        body {
+            background-color: var(--bg-void);
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        /* Cyber Grid Background */
+        .bg-grid {
+            position: fixed;
+            top: 0; left: 0; right: 0; height: 100vh;
+            background-image: 
+                linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+                linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: linear-gradient(to bottom, black 30%, transparent 100%);
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        /* Noise Texture */
+        .noise-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Glassmorphism 2.0 */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+        }
+
+        /* Neon Text Effects */
+        .neon-text-cyan { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
+        .neon-text-rose { text-shadow: 0 0 10px rgba(244, 63, 94, 0.5); }
+        .neon-text-emerald { text-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+        .neon-text-purple { text-shadow: 0 0 10px rgba(168, 85, 247, 0.5); }
+        .neon-text-blue { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .neon-text-amber { text-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+
+        /* Inputs */
+        .input-void {
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid #1e293b;
+            color: #f1f5f9;
+            transition: all 0.2s;
+        }
+        .input-void:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Animations */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-entry { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+
+        /* Toggle Switch */
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+
+        /* Signal Bars */
+        .signal-bar {
+            width: 4px;
+            height: 12px;
+            background: #334155;
+            border-radius: 1px;
+            display: inline-block;
+            margin-right: 1px;
+        }
+        .signal-active { background: #3b82f6; box-shadow: 0 0 5px #3b82f6; }
+        .signal-strong { background: #a855f7; box-shadow: 0 0 5px #a855f7; }
+    </style>
+</head>
+<body class="min-h-screen pb-12 selection:bg-cyan-500/30">
+    <div class="bg-grid"></div>
+    <div class="noise-overlay"></div>
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 border-b border-white/5 bg-[#020617]/90 backdrop-blur-xl mb-8">
+        <div class="max-w-[1800px] mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tighter text-white leading-none">
+                        QUANT<span class="text-cyan-400">FLOW</span>
+                    </h1>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold text-slate-500 tracking-[0.2em]">GVEX HORIZON v5.3</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                 <button id="exportBtn" class="hidden flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 transition-colors border border-slate-700 cursor-pointer">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    EXPORT JSON
+                </button>
+                <button id="copyTvBtn" class="hidden flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-[10px] font-bold text-indigo-300 transition-colors border border-indigo-500/30 cursor-pointer">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+                    COPY TV DATA
+                </button>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
+                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span class="text-[10px] font-medium text-slate-400">SYSTEM ONLINE</span>
+                </div>
+                <div class="text-xs font-mono text-slate-500" id="currentDateDisplay"></div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-[1800px] mx-auto px-4">
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            
+            <!-- LEFT: Command Deck -->
+            <aside class="xl:col-span-3 space-y-5 animate-entry">
+                
+                <!-- Data Ingestion -->
+                <div class="glass-panel rounded-2xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            Data Ingestion
+                        </h2>
+                        <span class="text-[10px] text-slate-500">CBOE + DIX</span>
+                    </div>
+
+                    <!-- SPX File -->
+                    <div class="relative group">
+                        <input type="file" id="csvFile" accept=".csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div class="border border-dashed border-slate-700 rounded-xl p-4 bg-slate-900/40 group-hover:border-cyan-500/50 group-hover:bg-cyan-500/5 transition-all flex flex-col items-center justify-center text-center h-24">
+                            <svg class="w-6 h-6 text-slate-500 group-hover:text-cyan-400 mb-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            <span id="fileNameDisplay" class="text-xs font-medium text-slate-400 group-hover:text-white truncate max-w-[200px]">Drop SPX Options CSV</span>
+                        </div>
+                    </div>
+
+                    <!-- DIX File -->
+                    <div class="relative group">
+                        <input type="file" id="dixFile" accept=".csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div class="flex items-center justify-between px-3 py-2 bg-slate-900/40 border border-slate-700 rounded-lg group-hover:border-emerald-500/50 transition-colors">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover:bg-emerald-500 transition-colors"></div>
+                                <span class="text-xs text-slate-400">DIX Source File</span>
+                            </div>
+                            <span id="dixStatus" class="text-[10px] font-mono text-slate-600 group-hover:text-slate-300">SELECT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="glass-panel rounded-2xl p-5 space-y-4">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Configuration</h2>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="col-span-2">
+                            <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Spot Price ($)</label>
+                            <input type="number" id="spotPrice" step="0.01" placeholder="Auto-detect" class="input-void w-full px-3 py-2 rounded-lg text-sm font-mono">
+                        </div>
+                        <div class="col-span-2">
+                             <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Analysis Date</label>
+                            <input type="date" id="marketDate" class="input-void w-full px-3 py-2 rounded-lg text-sm font-mono text-slate-300">
+                        </div>
+                    </div>
+
+                    <!-- Dealer Logic -->
+                    <div class="p-3 rounded-xl bg-slate-900/40 border border-slate-800 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-medium text-slate-300">Dealer Net Short</div>
+                            <div class="text-[10px] text-slate-500">Dealers SHORT calls</div>
+                        </div>
+                        <div class="relative inline-block w-9 h-5">
+                            <input type="checkbox" id="dealerNetShort" checked class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                            <label for="dealerNetShort" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-700 cursor-pointer"></label>
+                        </div>
+                    </div>
+
+                    <button id="calculateBtn" class="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-sm font-bold rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        INITIALIZE MODEL
+                    </button>
+                    
+                    <button id="sampleBtn" class="w-full py-2 bg-slate-800/50 hover:bg-slate-700 text-xs font-medium text-slate-400 hover:text-white rounded-lg border border-slate-700 transition-colors cursor-pointer">
+                        LOAD DEMO DATA
+                    </button>
+                    
+                    <div id="statusMessage" class="text-[10px] text-center text-slate-500 min-h-[15px] font-mono"></div>
+                </div>
+
+                <!-- Key Levels Info (New) -->
+                <div id="wallsPanel" class="hidden glass-panel rounded-2xl p-4 space-y-3 animate-entry">
+                     <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Implied Walls</h2>
+                     <div class="grid grid-cols-2 gap-3">
+                         <div class="p-2 bg-slate-900/50 rounded border border-slate-800 text-center">
+                             <div class="text-[10px] text-slate-500">Call Wall</div>
+                             <div id="callWall" class="text-sm font-bold text-emerald-400 font-mono">--</div>
+                         </div>
+                          <div class="p-2 bg-slate-900/50 rounded border border-slate-800 text-center">
+                             <div class="text-[10px] text-slate-500">Put Wall</div>
+                             <div id="putWall" class="text-sm font-bold text-rose-400 font-mono">--</div>
+                         </div>
+                     </div>
+                </div>
+            </aside>
+
+            <!-- RIGHT: Dashboard -->
+            <main class="xl:col-span-9 space-y-6 animate-entry delay-100">
+                
+                <!-- 1. Strategic Context Banner -->
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden border-l-4 border-l-slate-700 transition-colors duration-500" id="regimePanel">
+                    <!-- Decor -->
+                    <div class="absolute top-0 right-0 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
+                        <!-- Regime Status -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="flex items-center gap-3 mb-1">
+                                <div class="p-1.5 rounded bg-white/5 text-slate-400 border border-white/10">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012-2h2a2 2 0 012-2h2a2 2 0 012-2h2a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V9a2 2 0 012-2h2a2 2 0 012-2h2a2 2 0 012 2v10"></path></svg>
+                                </div>
+                                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Strategic Context</h3>
+                            </div>
+                            
+                            <div>
+                                <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Detected Regime</div>
+                                <div id="marketRegime" class="text-4xl font-black text-slate-600 font-mono tracking-tight">AWAITING DATA</div>
+                            </div>
+                            
+                            <div id="tradingRecommendationContainer" class="text-sm text-slate-400 leading-relaxed max-w-2xl border-l-2 border-slate-700 pl-4">
+                                <p>Initialize system with SPX option chain and DIX data to generate strategic analysis.</p>
+                            </div>
+                        </div>
+
+                        <!-- Key Indicators -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="p-3 rounded-xl bg-slate-950/30 border border-white/5">
+                                <div class="text-[10px] text-slate-500 uppercase">DIX Trend (3d)</div>
+                                <div id="dixTrend" class="text-lg font-bold text-slate-300 font-mono mt-1">--</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950/30 border border-white/5">
+                                <div class="text-[10px] text-slate-500 uppercase">DIX Thresholds</div>
+                                <div id="dixLevels" class="text-xs font-medium text-slate-400 font-mono mt-2">-- / --</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950/30 border border-white/5 col-span-2">
+                                <div class="text-[10px] text-slate-500 uppercase">Positioning Bias</div>
+                                <div id="positioningBias" class="text-lg font-bold text-slate-300 font-mono mt-1">NEUTRAL</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Horizon Flip Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 animate-entry delay-200">
+                    <!-- Short DTE -->
+                    <div class="glass-card rounded-xl p-4 border-t-2 border-t-blue-500">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Short-DTE Flip</span>
+                            <span class="text-[10px] text-slate-600 font-mono">0-7 DAYS</span>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <div id="shortFlip" class="text-2xl font-bold text-slate-500 font-mono">--</div>
+                            <div id="shortFlipStrength" class="flex gap-0.5"></div>
+                        </div>
+                        <div class="text-[9px] text-slate-500 mt-1">Flip Strength</div>
+                    </div>
+                    <!-- Mid DTE -->
+                    <div class="glass-card rounded-xl p-4 border-t-2 border-t-purple-500">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Mid-DTE Flip</span>
+                            <span class="text-[10px] text-slate-600 font-mono">7-21 DAYS</span>
+                        </div>
+                         <div class="flex items-baseline gap-2">
+                            <div id="midFlip" class="text-2xl font-bold text-slate-500 font-mono">--</div>
+                            <div id="midFlipStrength" class="flex gap-0.5"></div>
+                        </div>
+                        <div class="text-[9px] text-slate-500 mt-1">Flip Strength</div>
+                    </div>
+                    <!-- Long DTE -->
+                    <div class="glass-card rounded-xl p-4 border-t-2 border-t-emerald-500">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Long-DTE Flip</span>
+                            <span class="text-[10px] text-slate-600 font-mono">21+ DAYS</span>
+                        </div>
+                         <div class="flex items-baseline gap-2">
+                            <div id="longFlip" class="text-2xl font-bold text-slate-500 font-mono">--</div>
+                            <div id="longFlipStrength" class="flex gap-0.5"></div>
+                        </div>
+                        <div class="text-[9px] text-slate-500 mt-1">Flip Strength</div>
+                    </div>
+                </div>
+
+                <!-- 3. Main Analytics Deck -->
+                <div class="glass-panel rounded-2xl overflow-hidden animate-entry delay-300 flex flex-col">
+                    
+                    <!-- Tabs Header -->
+                    <div class="flex items-center justify-between px-4 border-b border-white/5 bg-slate-950/30">
+                        <div class="flex space-x-1" id="chartTabs">
+                            <button class="px-4 py-3 text-xs font-bold text-cyan-400 border-b-2 border-cyan-400 transition-colors cursor-pointer" data-tab="horizon">HORIZON ANALYSIS</button>
+                            <button class="px-4 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent hover:text-slate-300 transition-colors cursor-pointer" data-tab="greeks">GREEKS PROFILE</button>
+                            <button class="px-4 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent hover:text-slate-300 transition-colors cursor-pointer" data-tab="data">DATA MATRIX</button>
+                        </div>
+                        
+                        <!-- Status Indicator -->
+                        <div class="flex items-center gap-2 py-2">
+                             <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/5 border border-cyan-500/20">
+                                <span class="relative flex h-2 w-2">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                                </span>
+                                <span class="text-[10px] font-bold text-cyan-400 tracking-wider">LIVE INTERACTION ENABLED</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Horizon -->
+                    <div id="tab-horizon" class="p-4 space-y-4 block bg-slate-900/20">
+                        <div class="glass-card rounded-xl p-1 relative h-[400px]">
+                            <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                                <h3 class="text-sm font-bold text-slate-200">Horizon Gamma Distribution</h3>
+                                <p class="text-[10px] text-slate-500 uppercase tracking-wide">Short vs Mid vs Long DTE Exposure</p>
+                            </div>
+                            <div id="horizonChart" class="w-full h-full"></div>
+                        </div>
+                        
+                        <div class="glass-card rounded-xl p-1 relative h-[300px]">
+                            <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                                <h3 class="text-sm font-bold text-slate-200">Cumulative Gamma Inventory</h3>
+                                <p class="text-[10px] text-yellow-500 uppercase tracking-wide">Market Maker Positioning Levels</p>
+                            </div>
+                            <div id="cumGexChart" class="w-full h-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Greeks -->
+                    <div id="tab-greeks" class="p-4 hidden space-y-4 bg-slate-900/20">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div class="glass-card rounded-xl p-1 relative h-[350px]">
+                                <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                                    <h3 class="text-sm font-bold text-slate-200">Net GEX Profile</h3>
+                                    <p class="text-[10px] text-emerald-500 uppercase tracking-wide">Call vs Put Exposure</p>
+                                </div>
+                                <div id="gexChart" class="w-full h-full"></div>
+                            </div>
+                             <div class="glass-card rounded-xl p-1 relative h-[350px]">
+                                <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                                    <h3 class="text-sm font-bold text-slate-200">Net VEX Profile</h3>
+                                    <p class="text-[10px] text-rose-500 uppercase tracking-wide">Vega Exposure</p>
+                                </div>
+                                <div id="vexChart" class="w-full h-full"></div>
+                            </div>
+                        </div>
+                        <div class="glass-card rounded-xl p-1 relative h-[300px]">
+                            <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                                <h3 class="text-sm font-bold text-slate-200">Vanna Exposure</h3>
+                                <p class="text-[10px] text-purple-500 uppercase tracking-wide">Spot/Vol Correlation Sensitivity</p>
+                            </div>
+                            <div id="vannaChart" class="w-full h-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Data -->
+                    <div id="tab-data" class="hidden">
+                         <div class="overflow-x-auto max-h-[600px]">
+                            <table class="w-full text-left relative">
+                                <thead class="sticky top-0 z-10">
+                                    <tr class="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-400 bg-slate-950">
+                                        <th class="px-6 py-3 font-bold">Strike</th>
+                                        <th class="px-6 py-3 font-bold">Total OI</th>
+                                        <th class="px-6 py-3 font-bold text-right">Net GEX ($B)</th>
+                                        <th class="px-6 py-3 font-bold text-right">Net VEX ($M)</th>
+                                        <th class="px-6 py-3 font-bold text-right">Net Vanna ($M)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody" class="divide-y divide-white/5 text-xs font-mono bg-slate-900/20">
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-12 text-center text-slate-600 italic">
+                                            System Standby. Load data to populate matrix.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // --- Application State & Constants ---
+        const CONTRACT_SIZE = 100;
+        
+        const AppState = {
+            rawData: [],
+            dixData: [],
+            processedStrikes: [],
+            spotPrice: 0,
+            marketDate: new Date(),
+            hasShortData: false,
+            hasMidData: false,
+            hasLongData: false,
+            
+            results: {
+                callWall: 0,
+                putWall: 0,
+                shortFlip: 0,
+                midFlip: 0,
+                longFlip: 0
+            },
+            
+            reset() {
+                this.rawData = [];
+                this.processedStrikes = [];
+                this.results = { callWall: 0, putWall: 0, shortFlip: 0, midFlip: 0, longFlip: 0 };
+            }
+        };
+
+        // --- Helper Functions ---
+
+        function getRussianMonthNumber(monthName) {
+            const months = {
+                'января': 0, 'февраля': 1, 'марта': 2,
+                'апреля': 3, 'мая': 4, 'июня': 5,
+                'июля': 6, 'августа': 7, 'сентября': 8,
+                'октября': 9, 'ноября': 10, 'декабря': 11
+            };
+            const monthKey = monthName.toLowerCase().replace('.', '');
+            return months[monthKey] !== undefined ? months[monthKey] : NaN;
+        }
+
+        function findColumn(header, keywords, side = null) {
+            const strikeIdx = header.findIndex(h => h.toLowerCase() === 'strike');
+            if (strikeIdx === -1) return -1; 
+
+            const idx = header.findIndex((h, i) => {
+                const hLower = h.toLowerCase().trim();
+                const matches = keywords.some(kw => hLower.includes(kw));
+                
+                if (!matches) return false;
+                if (side === 'call' && i >= strikeIdx) return false;
+                if (side === 'put' && i <= strikeIdx) return false;
+                return true;
+            });
+            
+            return idx;
+        }
+
+        function normalizeIV(iv) {
+            if (!iv || isNaN(iv) || iv <= 0) return 0.20;
+            if (iv > 500) return iv / 10000; // 5000bps = 50%
+            if (iv > 5) return iv / 100; // 50 = 50%
+            return iv; // 0.5 = 50%
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // --- Logic Modules ---
+        
+        const DIXDataManager = {
+            parse(file) {
+                UI.setStatus("Parsing DIX...", "info");
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: 'greedy',
+                    complete: (results) => {
+                        try {
+                            const raw = results.data;
+                            AppState.dixData = raw.map(row => {
+                                const r = {};
+                                Object.keys(row).forEach(k => r[k.toLowerCase().trim()] = row[k]);
+                                if (!r.date || !r.dix) return null;
+                                const d = new Date(r.date);
+                                if (isNaN(d.getTime())) return null;
+                                return {
+                                    date: d,
+                                    dix: parseFloat(r.dix),
+                                    price: parseFloat(r.price)
+                                };
+                            }).filter(d => d && !isNaN(d.dix));
+                            
+                            AppState.dixData.sort((a, b) => a.date - b.date);
+                            
+                            const count = AppState.dixData.length;
+                            UI.dixStatus.textContent = `READY (${count} RECS)`;
+                            UI.dixStatus.className = "text-[10px] font-mono text-emerald-400 font-bold";
+                            UI.setStatus("DIX Data Loaded", "success");
+                            
+                        } catch (e) {
+                            console.error(e);
+                            UI.setStatus("DIX Parse Error", "error");
+                        }
+                    }
+                });
+            },
+
+            getRecordForDate(targetDate) {
+                if (!AppState.dixData || AppState.dixData.length === 0) return null;
+                const tDate = new Date(targetDate);
+                tDate.setHours(0,0,0,0);
+                
+                let closest = null;
+                let minDiff = Infinity;
+                
+                for (let i = AppState.dixData.length - 1; i >= 0; i--) {
+                    const rec = AppState.dixData[i];
+                    const rDate = new Date(rec.date);
+                    rDate.setHours(0,0,0,0);
+
+                    const diff = Math.abs(tDate - rDate);
+                    if (diff === 0) return rec;
+                    if (diff < minDiff && diff <= (4 * 24 * 60 * 60 * 1000)) {
+                        minDiff = diff;
+                        closest = rec;
+                    }
+                }
+                return closest;
+            },
+
+            getDynamicThresholds(marketDate) {
+                const defaults = { bullish: 0.47, bearish: 0.43 };
+                if (!AppState.dixData || AppState.dixData.length < 30) return defaults;
+                const relevant = AppState.dixData.filter(d => d.date <= marketDate);
+                if (relevant.length < 30) return defaults;
+                const history = relevant.slice(-60).map(d => d.dix).sort((a,b) => a - b);
+                const p10Index = Math.floor(history.length * 0.1);
+                const p90Index = Math.floor(history.length * 0.9);
+                return {
+                    bearish: history[p10Index],
+                    bullish: history[p90Index]
+                };
+            },
+
+            getTrend(targetDate) {
+                if (!AppState.dixData || AppState.dixData.length < 3) return "N/A";
+                const rec = this.getRecordForDate(targetDate);
+                if (!rec) return "N/A";
+                const idx = AppState.dixData.indexOf(rec);
+                if (idx < 2) return "N/A";
+                const d0 = AppState.dixData[idx].dix;
+                const d1 = AppState.dixData[idx-1].dix;
+                const d2 = AppState.dixData[idx-2].dix;
+                const avg = (d0 + d1 + d2) / 3;
+                return d0 > avg ? "RISING" : "FALLING";
+            }
+        };
+
+        const MarketRegimeAnalyzer = {
+            determine(dixRecord, thresholds, shortGex, totalGex, currentVol, spotPrice, flipPrice) {
+                if (currentVol > 25) {
+                    return { 
+                        regime: "VOLATILITY SPIKE", 
+                        color: "neon-text-rose", 
+                        rec: "TRADING SUSPENDED. Extreme volatility.", 
+                        bias: "EXTREME CAUTION",
+                        volCtx: "EXPANDING"
+                    };
+                }
+
+                if (!dixRecord) return this.determineWithoutDIX(shortGex);
+                
+                const dixValue = dixRecord.dix;
+                const distToFlip = (spotPrice - flipPrice) / flipPrice;
+
+                if (dixValue >= thresholds.bullish && shortGex > 0) {
+                    let rec = "Aggressive Put Spreads favorable.";
+                    if (distToFlip > 0.01) rec += " Entry favorable: 1-2% below current price.";
+                    else if (distToFlip < -0.01) rec += " Caution: Price below Gamma Flip support.";
+                    else rec += " Support zone engaged.";
+                    
+                    return { 
+                        regime: "DEEP LIQUIDITY", 
+                        color: "neon-text-emerald", 
+                        rec: rec, 
+                        bias: "BULLISH / STABLE",
+                        volCtx: "COMPRESSED"
+                    };
+                }
+
+                if (dixValue <= thresholds.bearish && shortGex < 0) {
+                    return { 
+                        regime: "FRAGILE INSTABILITY", 
+                        color: "neon-text-rose", 
+                        rec: "Avoid Long Exposure. High risk of liquidation cascades.", 
+                        bias: "BEARISH / VOLATILE",
+                        volCtx: "EXPANDING"
+                    };
+                }
+
+                if (dixValue <= thresholds.bearish && shortGex > 0) {
+                    return { 
+                        regime: "REFLEXIVE RALLY RISK", 
+                        color: "neon-text-amber", 
+                        rec: "Dealers dampening vol while institutions sell. Fade rallies.", 
+                        bias: "NEUTRAL-BEARISH",
+                        volCtx: "NORMAL"
+                    };
+                }
+                
+                if (dixValue >= thresholds.bullish && shortGex < 0) {
+                    return { 
+                        regime: "VOLATILITY COMPRESSION", 
+                        color: "neon-text-cyan", 
+                        rec: "Dealers short gamma but institutions buying. Expect choppy upside.", 
+                        bias: "NEUTRAL-BULLISH",
+                        volCtx: "NORMAL"
+                    };
+                }
+
+                return { 
+                    regime: "CHOP / NEUTRAL", 
+                    color: "text-yellow-400", 
+                    rec: "No clear edge. Mean reversion strategies preferred.", 
+                    bias: "NEUTRAL",
+                    volCtx: "NORMAL"
+                };
+            },
+            
+            determineWithoutDIX(shortGex) {
+                if (shortGex < 0) {
+                    return {
+                        regime: "STRUCTURAL WEAKNESS",
+                        color: "neon-text-rose",
+                        rec: "Bearish structure. No DIX confirmation.",
+                        bias: "BEARISH",
+                        volCtx: "ELEVATED"
+                    };
+                }
+                return {
+                    regime: "STABLE FLOW (NO DIX)",
+                    color: "neon-text-blue",
+                    rec: "Positive gamma floor. Awaiting DIX.",
+                    bias: "NEUTRAL-BULLISH",
+                    volCtx: "COMPRESSED"
+                };
+            }
+        };
+
+        // --- UI Controller ---
+        
+        const UI = {
+            fileInput: document.getElementById('csvFile'),
+            fileDisplay: document.getElementById('fileNameDisplay'),
+            dixInput: document.getElementById('dixFile'),
+            dixStatus: document.getElementById('dixStatus'),
+            spotInput: document.getElementById('spotPrice'),
+            dateInput: document.getElementById('marketDate'),
+            dealerToggle: document.getElementById('dealerNetShort'),
+            
+            calcBtn: document.getElementById('calculateBtn'),
+            sampleBtn: document.getElementById('sampleBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            status: document.getElementById('statusMessage'),
+            
+            elRegimePanel: document.getElementById('regimePanel'),
+            elRegime: document.getElementById('marketRegime'),
+            elRecContainer: document.getElementById('tradingRecommendationContainer'),
+            elDixTrend: document.getElementById('dixTrend'),
+            elDixLevels: document.getElementById('dixLevels'),
+            elPosBias: document.getElementById('positioningBias'),
+            
+            elShortFlip: document.getElementById('shortFlip'),
+            elMidFlip: document.getElementById('midFlip'),
+            elLongFlip: document.getElementById('longFlip'),
+            elShortStr: document.getElementById('shortFlipStrength'),
+            elMidStr: document.getElementById('midFlipStrength'),
+            elLongStr: document.getElementById('longFlipStrength'),
+
+            elCallWall: document.getElementById('callWall'),
+            elPutWall: document.getElementById('putWall'),
+            wallsPanel: document.getElementById('wallsPanel'),
+            
+            dataStatus: document.createElement('div'), // virtual for logic
+
+            setStatus(msg, type = 'info') {
+                this.status.textContent = msg;
+                this.status.className = `text-[10px] text-center font-mono min-h-[15px] font-bold tracking-wide ${
+                    type === 'error' ? 'text-rose-400' : 
+                    type === 'success' ? 'text-emerald-400' : 'text-blue-400'
+                }`;
+            },
+
+            setLoading(isLoading) {
+                if (isLoading) {
+                    this.calcBtn.disabled = true;
+                    this.calcBtn.innerHTML = `<svg class="animate-spin h-4 w-4 inline mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>PROCESSING...`;
+                } else {
+                    this.calcBtn.disabled = false;
+                    this.calcBtn.innerHTML = 'INITIALIZE MODEL';
+                }
+            },
+
+            renderStrategicPanel(regimeData) {
+                this.elRegime.textContent = regimeData.regime;
+                this.elRegime.className = `text-4xl font-black font-mono tracking-tight ${regimeData.color}`;
+                
+                const borderColor = regimeData.color.includes('rose') ? 'border-l-rose-500' : 
+                                    regimeData.color.includes('emerald') ? 'border-l-emerald-500' : 
+                                    regimeData.color.includes('cyan') ? 'border-l-cyan-500' : 
+                                    regimeData.color.includes('amber') ? 'border-l-amber-500' : 'border-l-slate-700';
+                                    
+                this.elRegimePanel.className = `glass-panel rounded-2xl p-6 relative overflow-hidden border-l-4 transition-colors duration-500 ${borderColor}`;
+
+                this.elRecContainer.innerHTML = `
+                    <div class="space-y-2 animate-entry">
+                        <p class="text-slate-300"><span class="text-slate-500 uppercase text-xs font-bold tracking-wider mr-2">Action:</span> ${regimeData.rec}</p>
+                    </div>
+                `;
+                
+                let biasColor = 'text-slate-300';
+                if (regimeData.bias.includes('BULLISH')) biasColor = 'text-emerald-400';
+                if (regimeData.bias.includes('BEARISH')) biasColor = 'text-rose-400';
+                this.elPosBias.textContent = regimeData.bias;
+                this.elPosBias.className = `text-lg font-bold font-mono mt-1 ${biasColor}`;
+            },
+
+            renderFlipStrength(element, level) {
+                let html = '';
+                for (let i=0; i<3; i++) {
+                    let cls = 'signal-bar';
+                    if (i < level) cls += level === 3 ? ' signal-strong' : ' signal-active';
+                    html += `<div class="${cls}"></div>`;
+                }
+                element.innerHTML = html;
+            }
+        };
+
+        // --- Calculation Utilities ---
+
+        function calculateBS(S, K, t, v, r = 0.04, q = 0.015) { 
+            if (t <= 0.001) t = 0.001; 
+            if (v <= 0.01) v = 0.01;   
+            if (S <= 0 || K <= 0) return { d1: 0, d2: 0, vega: 0, vanna: 0 };
+
+            const sqrtT = Math.sqrt(t);
+            const d1 = (Math.log(S / K) + (r - q + (v * v) / 2) * t) / (v * sqrtT);
+            const d2 = d1 - v * sqrtT;
+            const pdf = Math.exp(-(d1 * d1) / 2) / Math.sqrt(2 * Math.PI);
+            
+            const vega = S * sqrtT * pdf * 0.01; 
+            const denom = v * sqrtT;
+            const vanna = denom > 0.002 ? (vega * (1 - d1 * d2) / denom) : 0;
+            
+            return { d1, d2, vega, vanna };
+        }
+
+        function findFlip(strikes, gexProp) {
+            const totalAbsGex = strikes.reduce((sum, s) => {
+                const val = gexProp ? s[gexProp] : (s.callGex + s.putGex);
+                return sum + Math.abs(val);
+            }, 0);
+            
+            // FIX: If absolutely no volume in this horizon, return null
+            if (totalAbsGex < 0.1) {
+                return { val: "N/A", strength: 0, isNull: true };
+            }
+
+            let flip = null;
+            let closestVal = Infinity;
+            let closestStrike = null;
+            
+            let cum = 0;
+            const cumData = strikes.map(d => {
+                const val = gexProp ? d[gexProp] : (d.callGex + d.putGex);
+                cum += val;
+                return cum;
+            });
+            
+            // Find crossover
+            for (let i = 1; i < cumData.length; i++) {
+                const prev = cumData[i-1];
+                const curr = cumData[i];
+                
+                if ((prev < 0 && curr > 0) || (prev > 0 && curr < 0)) {
+                    const x1 = strikes[i-1].strike;
+                    const x2 = strikes[i].strike;
+                    const interp = x1 + (0 - prev) * (x2 - x1) / (curr - prev);
+                    flip = Math.round(interp);
+                    break; 
+                }
+                if (Math.abs(curr) < closestVal) {
+                    closestVal = Math.abs(curr);
+                    closestStrike = strikes[i].strike;
+                }
+            }
+            
+            // Result: Prefer flip, fallback to closest, fallback to N/A if nothing found
+            const finalFlip = flip !== null ? flip : (closestStrike ? Math.round(closestStrike) : "N/A");
+            
+            // Strength
+            const range = 50;
+            const conc = strikes.filter(s => Math.abs(s.strike - finalFlip) <= range)
+                                .reduce((s,x) => s + Math.abs(x[gexProp]), 0);
+            const ratio = totalAbsGex > 0 ? conc / totalAbsGex : 0;
+            let strength = 1;
+            if (ratio > 0.25) strength = 3;
+            else if (ratio > 0.12) strength = 2;
+
+            return { val: finalFlip, strength: strength, isNull: false };
+        }
+        
+        function findWalls(strikes) {
+            let maxCallGex = 0, callWall = 0;
+            let minPutGex = 0, putWall = 0; 
+            strikes.forEach(s => {
+                if (s.callGex > maxCallGex) { maxCallGex = s.callGex; callWall = s.strike; }
+                if (s.putGex < minPutGex) { minPutGex = s.putGex; putWall = s.strike; }
+            });
+            return { callWall, putWall };
+        }
+
+        function formatLargeNumber(num, isCurrency = true) {
+            const absNum = Math.abs(num);
+            let suffix = '';
+            let val = num;
+            if (absNum >= 1e9) { val = num / 1e9; suffix = 'B'; }
+            else if (absNum >= 1e6) { val = num / 1e6; suffix = 'M'; }
+            else if (absNum >= 1e3) { val = num / 1e3; suffix = 'K'; }
+            return (val < 0 ? '-' : '') + (isCurrency ? '$' : '') + Math.abs(val).toFixed(2) + suffix;
+        }
+
+        // --- Core Engine ---
+
+        function validateInputs() {
+            const spot = parseFloat(UI.spotInput.value);
+            if (!spot || spot <= 0 || spot > 100000) throw new Error('Valid Spot price required');
+            if (AppState.rawData.length === 0) throw new Error('No SPX data loaded');
+            // Auto-date handled inside runCalculations if empty
+            return true;
+        }
+
+        function processRawCsv(rows) {
+            let detectedSpot = null;
+            let detectedDate = null;
+            let headerRowIndex = -1;
+
+            // Metadata Scan
+            for(let i = 0; i < Math.min(rows.length, 15); i++) {
+                const rowStr = rows[i].join(' ');
+
+                // Spot Match
+                const spotMatch = rowStr.match(/Last[:=]?\s*([\d.,]+)/i) || 
+                                  rowStr.match(/Last Price:\s*([\d.,]+)/i) ||
+                                  rowStr.match(/Last\s+([\d.,]+)/i);
+                
+                if (spotMatch && !detectedSpot) {
+                    detectedSpot = parseFloat(spotMatch[1].replace(/,/g, ''));
+                }
+                
+                // Date Match (Russian & English)
+                const dateMatch = rowStr.match(/Date:\s*([^\n,]+)/i) || rowStr.match(/Date:\s*([^\n]+)/i);
+                
+                if(dateMatch && !detectedDate) {
+                    let dateStr = dateMatch[1].split('GMT')[0].trim();
+                    
+                    // Russian: "21 ноября 2025 г."
+                    const russianMatch = dateStr.match(/(\d{1,2})\s+([а-яёА-ЯЁ]+)\s+(\d{4})/i);
+                    if (russianMatch) {
+                        const day = parseInt(russianMatch[1]);
+                        const month = getRussianMonthNumber(russianMatch[2]);
+                        const year = parseInt(russianMatch[3]);
+                        if (!isNaN(month)) {
+                            // Force exact date object construction (Month is 0-indexed)
+                            const d = new Date(year, month, day);
+                            // Format YYYY-MM-DD for input value
+                            const mStr = (month + 1).toString().padStart(2, '0');
+                            const dStr = day.toString().padStart(2, '0');
+                            detectedDate = `${year}-${mStr}-${dStr}`;
+                        }
+                    } else {
+                        // Standard
+                        const parsedDate = new Date(dateStr);
+                        if(!isNaN(parsedDate.getTime())) {
+                            detectedDate = parsedDate.toISOString().split('T')[0];
+                        }
+                    }
+                }
+            }
+            
+            if (detectedSpot) UI.spotInput.value = detectedSpot;
+            // Only set date if empty
+            if (detectedDate && !UI.dateInput.value) {
+                UI.dateInput.value = detectedDate;
+            }
+
+            // Header
+            for (let i = 0; i < Math.min(rows.length, 50); i++) {
+                const rowLower = rows[i].map(c => c.toLowerCase().trim());
+                if (rowLower.includes('strike') && (rowLower.includes('gamma') || rowLower.includes('gam'))) {
+                    headerRowIndex = i;
+                    break;
+                }
+            }
+            if (headerRowIndex === -1) throw new Error("Header not found. Need Strike, Gamma, OI.");
+
+            const header = rows[headerRowIndex].map(c => c.trim());
+            const strikeIdx = header.findIndex(h => h.toLowerCase() === 'strike');
+            if (strikeIdx === -1) throw new Error("Strike column missing");
+
+            const callGammaIdx = findColumn(header, ['gamma', 'gam'], 'call');
+            const callOiIdx = findColumn(header, ['open', 'oi'], 'call');
+            const callIvIdx = findColumn(header, ['iv', 'implied'], 'call');
+
+            const putGammaIdx = findColumn(header, ['gamma', 'gam'], 'put');
+            const putOiIdx = findColumn(header, ['open', 'oi'], 'put');
+            const putIvIdx = findColumn(header, ['iv', 'implied'], 'put');
+            
+            const expIdx = header.findIndex(h => h.toLowerCase().includes('expiration') || h.toLowerCase().includes('date'));
+
+            const parsed = [];
+            const dataRows = rows.slice(headerRowIndex + 1);
+
+            dataRows.forEach(row => {
+                const strike = parseFloat(row[strikeIdx] ? row[strikeIdx].toString().replace(/,/g,'') : 0);
+                if (!strike) return;
+                const expStr = expIdx !== -1 ? row[expIdx] : 'N/A';
+                
+                if (callGammaIdx !== -1 && callOiIdx !== -1) {
+                    const oi = parseFloat(row[callOiIdx] ? row[callOiIdx].toString().replace(/,/g,'') : 0);
+                    const gam = parseFloat(row[callGammaIdx] ? row[callGammaIdx].toString().replace(/,/g,'') : 0);
+                    const iv = callIvIdx !== -1 ? parseFloat(row[callIvIdx]) : 0;
+                    if (oi > 0) parsed.push({ strike, type: 'call', gamma: gam, oi, iv, expiration: expStr });
+                }
+                if (putGammaIdx !== -1 && putOiIdx !== -1) {
+                    const oi = parseFloat(row[putOiIdx] ? row[putOiIdx].toString().replace(/,/g,'') : 0);
+                    const gam = parseFloat(row[putGammaIdx] ? row[putGammaIdx].toString().replace(/,/g,'') : 0);
+                    const iv = putIvIdx !== -1 ? parseFloat(row[putIvIdx]) : 0;
+                    if (oi > 0) parsed.push({ strike, type: 'put', gamma: gam, oi, iv, expiration: expStr });
+                }
+            });
+            
+            AppState.rawData = parsed;
+        }
+
+        function runCalculations() {
+            UI.setLoading(true);
+            
+            setTimeout(() => {
+                try {
+                    validateInputs(); // Throws if critical data missing
+                    
+                    // Ensure date is set, fallback to now if completely absent
+                    if (!UI.dateInput.value) {
+                         UI.dateInput.value = new Date().toISOString().split('T')[0];
+                    }
+
+                    const spotPrice = parseFloat(UI.spotInput.value);
+                    AppState.spotPrice = spotPrice;
+
+                    // Parse input date correctly as midnight local time
+                    const parts = UI.dateInput.value.split('-');
+                    const marketDate = new Date(parts[0], parts[1]-1, parts[2]);
+                    AppState.marketDate = marketDate;
+
+                    const dealerSign = UI.dealerToggle.checked ? -1 : 1;
+                    
+                    const dixRecord = DIXDataManager.getRecordForDate(marketDate);
+                    if(dixRecord) {
+                         UI.elDixTrend.textContent = DIXDataManager.getTrend(marketDate);
+                         const dixThresholds = DIXDataManager.getDynamicThresholds(marketDate);
+                         UI.elDixLevels.textContent = `Bear: ${dixThresholds.bearish.toFixed(2)} / Bull: ${dixThresholds.bullish.toFixed(2)}`;
+                    }
+
+                    const strikes = {};
+                    let totalIv = 0;
+                    let ivCount = 0;
+
+                    AppState.rawData.forEach(row => {
+                        const k = row.strike;
+                        if (!strikes[k]) {
+                            strikes[k] = { strike: k, callGex: 0, putGex: 0, callVex: 0, putVex: 0, callVanna: 0, putVanna: 0, totalOi: 0, shortGex: 0, midGex: 0, longGex: 0 };
+                        }
+
+                        strikes[k].totalOi += row.oi;
+
+                        let t = 0.001; 
+                        let dte = 0;
+                        
+                        if (row.expiration && row.expiration !== 'N/A') {
+                            let d = new Date(row.expiration);
+                            // Try CBOE style "Fri Nov 21 2025"
+                            if (isNaN(d.getTime())) {
+                                // Fallback parsers if needed
+                            }
+
+                            if (!isNaN(d.getTime())) {
+                                // Precise DTE: (Exp - Market) in days
+                                const diffTime = d.getTime() - marketDate.getTime();
+                                const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                                
+                                dte = Math.max(0, diffDays);
+                                t = Math.max(0.001, dte / 365.0);
+                            }
+                        }
+
+                        const iv = normalizeIV(row.iv);
+                        if (dte <= 45) { totalIv += iv*100; ivCount++; }
+
+                        const gexVal = row.gamma * row.oi * CONTRACT_SIZE * (spotPrice * spotPrice) * 0.01;
+                        const bs = calculateBS(spotPrice, k, t, iv, 0.04, 0.015); 
+                        const vexVal = bs.vega * row.oi * CONTRACT_SIZE;
+                        const vannaVal = bs.vanna * row.oi * CONTRACT_SIZE * spotPrice;
+
+                        let netGex = 0;
+                        if (row.type === 'call') {
+                            const val = dealerSign * gexVal;
+                            strikes[k].callGex += val;
+                            strikes[k].callVex += (dealerSign * vexVal);
+                            strikes[k].callVanna += (dealerSign * vannaVal);
+                            netGex = val;
+                        } else {
+                            const val = -dealerSign * gexVal;
+                            strikes[k].putGex += val;
+                            strikes[k].putVex += (dealerSign * vexVal);
+                            strikes[k].putVanna += (dealerSign * vannaVal);
+                            netGex = val;
+                        }
+
+                        // Bucketing (Inclusive for 0DTE)
+                        if (dte < 7.0) strikes[k].shortGex += netGex;
+                        else if (dte < 21.0) strikes[k].midGex += netGex;
+                        else strikes[k].longGex += netGex;
+                    });
+
+                    AppState.processedStrikes = Object.values(strikes).sort((a, b) => a.strike - b.strike);
+
+                    const walls = findWalls(AppState.processedStrikes);
+                    UI.elCallWall.textContent = walls.callWall;
+                    UI.elPutWall.textContent = walls.putWall;
+                    UI.wallsPanel.classList.remove('hidden');
+
+                    const shortFlip = findFlip(AppState.processedStrikes, 'shortGex');
+                    const midFlip = findFlip(AppState.processedStrikes, 'midGex');
+                    const longFlip = findFlip(AppState.processedStrikes, 'longGex');
+
+                    AppState.results = {
+                        callWall: walls.callWall,
+                        putWall: walls.putWall,
+                        shortFlip: shortFlip.isNull ? 0 : shortFlip.val,
+                        midFlip: midFlip.isNull ? 0 : midFlip.val,
+                        longFlip: longFlip.isNull ? 0 : longFlip.val
+                    };
+
+                    const renderFlipUI = (elVal, elStr, result, label) => {
+                        if (result.isNull) {
+                            elVal.textContent = "NO DATA";
+                            elVal.className = "text-xl font-bold text-slate-600 font-mono italic";
+                            elStr.innerHTML = ""; 
+                        } else {
+                            elVal.textContent = result.val;
+                            elVal.className = "text-2xl font-bold text-white font-mono";
+                            UI.renderFlipStrength(elStr, result.strength);
+                        }
+                    };
+
+                    renderFlipUI(UI.elShortFlip, UI.elShortStr, shortFlip);
+                    renderFlipUI(UI.elMidFlip, UI.elMidStr, midFlip);
+                    renderFlipUI(UI.elLongFlip, UI.elLongStr, longFlip);
+
+                    // Regime Logic
+                    const totalShortGex = AppState.processedStrikes.reduce((s, x) => s + x.shortGex, 0);
+                    const totalGex = AppState.processedStrikes.reduce((s, x) => s + (x.callGex + x.putGex), 0);
+                    const avgIV = ivCount > 0 ? totalIv / ivCount : 20;
+                    const flipPrice = !shortFlip.isNull ? shortFlip.val : spotPrice;
+
+                    const dixThresholds = DIXDataManager.getDynamicThresholds(marketDate);
+                    const regime = MarketRegimeAnalyzer.determine(
+                        dixRecord, dixThresholds, totalShortGex, totalGex, avgIV, spotPrice, flipPrice
+                    );
+                    UI.renderStrategicPanel(regime);
+
+                    renderCharts();
+                    renderTable();
+                    
+                    UI.exportBtn.classList.remove('hidden');
+                    document.getElementById('copyTvBtn').classList.remove('hidden');
+                    UI.setStatus("Calculations Complete", "success");
+
+                } catch(e) {
+                    UI.setStatus(e.message, "error");
+                    console.error(e);
+                } finally {
+                    UI.setLoading(false);
+                }
+            }, 100);
+        }
+
+        function exportAnalysis() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                spot: AppState.spotPrice,
+                regime: UI.elRegime.textContent,
+                flips: {
+                    short: UI.elShortFlip.textContent,
+                    mid: UI.elMidFlip.textContent,
+                    long: UI.elLongFlip.textContent
+                },
+                walls: {
+                    call: UI.elCallWall.textContent,
+                    put: UI.elPutWall.textContent
+                },
+                strikes: AppState.processedStrikes
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `quantflow_${Date.now()}.json`;
+            a.click();
+        }
+
+        // --- Visualization ---
+
+        function renderCharts() {
+            if (!AppState.processedStrikes.length) return;
+            
+            const data = AppState.processedStrikes;
+            const spot = AppState.spotPrice;
+            const labels = data.map(s => s.strike);
+
+            const range = [spot * 0.85, spot * 1.15];
+
+            const commonLayout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Manrope, sans-serif', color: '#94a3b8', size: 10 },
+                xaxis: { 
+                    gridcolor: 'rgba(255,255,255,0.03)', 
+                    zerolinecolor: 'rgba(255,255,255,0.05)',
+                    range: range
+                },
+                yaxis: { 
+                    gridcolor: 'rgba(255,255,255,0.03)', 
+                    zerolinecolor: 'rgba(255,255,255,0.05)',
+                    fixedrange: true
+                },
+                margin: { l: 40, r: 20, t: 30, b: 30 },
+                showlegend: true,
+                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center', font: {color: '#cbd5e1'} },
+                hovermode: 'x unified',
+                dragmode: 'pan'
+            };
+
+            const spotLine = {
+                type: 'line', x0: spot, x1: spot, y0: 0, y1: 1, yref: 'paper',
+                line: { color: '#fff', width: 1, dash: 'dot' }
+            };
+
+            const config = { 
+                responsive: true, 
+                displayModeBar: false, 
+                scrollZoom: true 
+            };
+
+            // Only render if visible to avoid errors
+            if (document.getElementById('horizonChart')) {
+                Plotly.newPlot('horizonChart', [
+                    { x: labels, y: data.map(d => d.shortGex), type: 'bar', name: 'Short-DTE', marker: { color: '#3b82f6' } },
+                    { x: labels, y: data.map(d => d.midGex), type: 'bar', name: 'Mid-DTE', marker: { color: '#a855f7' } },
+                    { x: labels, y: data.map(d => d.longGex), type: 'bar', name: 'Long-DTE', marker: { color: '#10b981' } }
+                ], { ...commonLayout, barmode: 'relative', shapes: [spotLine] }, config);
+
+                let cum = 0;
+                const cumData = data.map(d => { cum += (d.callGex + d.putGex); return cum; });
+                Plotly.newPlot('cumGexChart', [
+                    { x: labels, y: cumData, type: 'scatter', mode: 'lines', fill: 'tozeroy', name: 'Cumulative GEX', line: { color: '#eab308', width: 2 } }
+                ], { ...commonLayout, shapes: [spotLine] }, config);
+            }
+
+            Plotly.newPlot('gexChart', [
+                { x: labels, y: data.map(d => d.callGex), type: 'bar', name: 'Call GEX', marker: { color: '#10b981' } },
+                { x: labels, y: data.map(d => d.putGex), type: 'bar', name: 'Put GEX', marker: { color: '#f43f5e' } }
+            ], { ...commonLayout, barmode: 'relative', shapes: [spotLine] }, config);
+
+            Plotly.newPlot('vexChart', [
+                { x: labels, y: data.map(d => d.callVex + d.putVex), type: 'bar', name: 'Net VEX', marker: { color: '#ec4899' } }
+            ], { ...commonLayout, shapes: [spotLine] }, config);
+
+            Plotly.newPlot('vannaChart', [
+                { x: labels, y: data.map(d => d.callVanna + d.putVanna), type: 'scatter', mode: 'lines+markers', name: 'Net Vanna', line: { color: '#a855f7', width: 1 }, marker: { size: 3 } }
+            ], { ...commonLayout, shapes: [spotLine] }, config);
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+            const top = [...AppState.processedStrikes].sort((a, b) => Math.abs(a.callGex + a.putGex) - Math.abs(b.callGex + b.putGex)).reverse().slice(0, 50);
+            
+            top.forEach(r => {
+                const net = r.callGex + r.putGex;
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-white/5 transition-colors group border-b border-white/5";
+                tr.innerHTML = `
+                    <td class="px-6 py-3 font-bold text-cyan-400 group-hover:text-white">${r.strike}</td>
+                    <td class="px-6 py-3 text-slate-400">${r.totalOi.toLocaleString()}</td>
+                    <td class="px-6 py-3 text-right font-bold ${net > 0 ? 'text-emerald-400' : 'text-rose-400'}">${formatLargeNumber(net, true)}</td>
+                    <td class="px-6 py-3 text-right text-slate-300">${formatLargeNumber(r.callVex + r.putVex, false)}</td>
+                    <td class="px-6 py-3 text-right text-slate-300">${formatLargeNumber(r.callVanna + r.putVanna, false)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- Event Wiring ---
+
+        UI.fileInput.addEventListener('change', (e) => {
+            if(e.target.files.length > 0) {
+                UI.fileDisplay.textContent = e.target.files[0].name;
+                UI.fileDisplay.classList.add('text-white');
+                
+                Papa.parse(e.target.files[0], {
+                    header: false, skipEmptyLines: 'greedy',
+                    complete: (res) => {
+                        try {
+                            processRawCsv(res.data);
+                            UI.setStatus("SPX Data Ingested", "success");
+                        } catch(err) {
+                            UI.setStatus(err.message, "error");
+                        }
+                    }
+                });
+            }
+        });
+
+        UI.dixInput.addEventListener('change', (e) => {
+            if(e.target.files.length > 0) {
+                DIXDataManager.parse(e.target.files[0]);
+            }
+        });
+
+        UI.calcBtn.addEventListener('click', runCalculations);
+        UI.exportBtn.addEventListener('click', exportAnalysis);
+
+        // --- TradingView Bridge ---
+        document.getElementById('copyTvBtn').addEventListener('click', () => {
+            const r = AppState.results;
+            const dateStr = UI.dateInput.value;
+            
+            const cWall = Math.round(r.callWall);
+            const pWall = Math.round(r.putWall);
+            const sFlip = Math.round(r.shortFlip);
+            const mFlip = Math.round(r.midFlip);
+            const lFlip = Math.round(r.longFlip);
+
+            const payload = `QUANTFLOW:${cWall},${pWall},${sFlip},${mFlip},${lFlip}:${dateStr}`;
+
+            navigator.clipboard.writeText(payload).then(() => {
+                const btn = document.getElementById('copyTvBtn');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = `<span class="text-emerald-400 font-bold">COPIED!</span>`;
+                btn.classList.add('border-emerald-500/50');
+                UI.setStatus(`Copied to clipboard!`, "success");
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('border-emerald-500/50');
+                }, 2500);
+            });
+        });
+
+        UI.sampleBtn.addEventListener('click', () => {
+            const demoDate = new Date();
+            UI.dateInput.value = demoDate.toISOString().split('T')[0];
+            UI.spotInput.value = 4500;
+            
+            const rows = [
+                ["S&P 500 INDEX", "Last: 4500.00", `Date: ${demoDate.toDateString()}`],
+                ["Expiration Date","Calls","Last","Net","Bid","Ask","Vol","IV","Delta","Gamma","Open Interest","Strike","Puts","Last","Net","Bid","Ask","Vol","IV","Delta","Gamma","Open Interest"]
+            ];
+            
+            const exps = [
+                new Date(demoDate.getTime() + (1 * 24 * 60 * 60 * 1000)),
+                new Date(demoDate.getTime() + (14 * 24 * 60 * 60 * 1000)),
+                new Date(demoDate.getTime() + (56 * 24 * 60 * 60 * 1000))
+            ];
+
+            exps.forEach((exp, i) => {
+                const expStr = exp.toDateString();
+                const width = 0.01 * (i+1); 
+                const shift = (i - 1) * 20; 
+                for(let k=4300; k<=4700; k+=25){
+                    const dist = (k - (4500 + shift))/4500;
+                    const gam = width * Math.exp(-100 * dist * dist / (i+1));
+                    const oi = 5000 * Math.exp(-20 * Math.abs(dist));
+                    const r = new Array(22).fill("");
+                    r[0] = expStr;
+                    r[7] = "15.0"; r[9] = gam.toFixed(4); r[10] = oi.toFixed(0); r[11] = k;
+                    r[18] = "16.0"; r[20] = gam.toFixed(4); r[21] = (oi*1.2).toFixed(0);
+                    rows.push(r);
+                }
+            });
+
+            // Mock DIX
+            const dixHistory = [];
+            for (let i=60; i>=0; i--) {
+                const d = new Date(demoDate);
+                d.setDate(d.getDate() - i);
+                dixHistory.push({date: d, dix: 0.38 + Math.random() * 0.14, price: 4500});
+            }
+            AppState.dixData = dixHistory;
+            
+            processRawCsv(rows); 
+            UI.dixStatus.textContent = "DEMO READY";
+            runCalculations();
+        });
+
+        UI.tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                UI.tabs.forEach(b => {
+                    b.classList.remove('text-cyan-400', 'border-cyan-400');
+                    b.classList.add('text-slate-500', 'border-transparent');
+                });
+                btn.classList.add('text-cyan-400', 'border-cyan-400');
+                btn.classList.remove('text-slate-500', 'border-transparent');
+                
+                const tabId = btn.dataset.tab;
+                Object.values(UI.tabContents).forEach(el => {
+                    el.classList.remove('block');
+                    el.classList.add('hidden');
+                    el.style.display = 'none'; 
+                });
+                const target = UI.tabContents[tabId];
+                target.classList.remove('hidden');
+                target.classList.add('block');
+                target.style.display = 'block'; 
+                
+                if (AppState.processedStrikes.length > 0) {
+                    setTimeout(() => {
+                        window.dispatchEvent(new Event('resize'));
+                        renderCharts();
+                    }, 50);
+                }
+            });
+        });
+        
+        // Init Tabs ref
+        UI.tabs = document.querySelectorAll('[data-tab]');
+        UI.tabContents = {
+             horizon: document.getElementById('tab-horizon'),
+             greeks: document.getElementById('tab-greeks'),
+             data: document.getElementById('tab-data')
+        };
+
+        window.addEventListener('resize', debounce(() => {
+             ['horizonChart', 'cumGexChart', 'gexChart', 'vexChart', 'vannaChart'].forEach(id => {
+                 const el = document.getElementById(id);
+                 if(el && el.data && el.data.length > 0) Plotly.Plots.resize(id);
+             });
+        }, 200));
+
+        // Auto set date initially
+        UI.dateInput.value = new Date().toISOString().split('T')[0];
+        document.getElementById('currentDateDisplay').textContent = new Date().toLocaleDateString();
+
+    </script>
+</body>
+</html>
