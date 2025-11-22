@@ -985,12 +985,25 @@
         }
         
         function findWalls(strikes) {
-            let maxCallGex = 0, callWall = 0;
-            let minPutGex = 0, putWall = 0; 
+            if (!strikes || strikes.length === 0) {
+                console.log('[Walls] No data available for wall detection');
+                return { callWall: null, putWall: null };
+            }
+
+            let maxCallGex = -1, callWall = null;
+            let maxPutGex = -1, putWall = null;
+
+            // Detect walls based on absolute gamma magnitude (decoupled from dealer sign)
             strikes.forEach(s => {
-                if (s.callGex > maxCallGex) { maxCallGex = s.callGex; callWall = s.strike; }
-                if (s.putGex < minPutGex) { minPutGex = s.putGex; putWall = s.strike; }
+                if (s.callGexAbs > maxCallGex) { maxCallGex = s.callGexAbs; callWall = s.strike; }
+                if (s.putGexAbs > maxPutGex) { maxPutGex = s.putGexAbs; putWall = s.strike; }
             });
+
+            const dealerNetShort = document.getElementById('dealerNetShort').checked;
+            console.log(`[Walls] Detection (Dealer Short: ${dealerNetShort})`);
+            console.log(`  > Top Call: ${callWall} (AbsGex: ${maxCallGex.toFixed(2)})`);
+            console.log(`  > Top Put: ${putWall} (AbsGex: ${maxPutGex.toFixed(2)})`);
+
             return { callWall, putWall };
         }
 
@@ -1120,6 +1133,11 @@
         function runCalculations() {
             UI.setLoading(true);
             
+            // Reset walls UI to prevent stale data
+            UI.wallsPanel.classList.add('hidden');
+            UI.elCallWall.textContent = '--';
+            UI.elPutWall.textContent = '--';
+            
             setTimeout(() => {
                 try {
                     validateInputs(); // Throws if critical data missing
@@ -1162,7 +1180,14 @@
                     AppState.rawData.forEach(row => {
                         const k = row.strike;
                         if (!strikes[k]) {
-                            strikes[k] = { strike: k, callGex: 0, putGex: 0, callVex: 0, putVex: 0, callVanna: 0, putVanna: 0, totalOi: 0, shortGex: 0, midGex: 0, longGex: 0 };
+                            strikes[k] = { 
+                                strike: k, 
+                                callGex: 0, putGex: 0, 
+                                callGexAbs: 0, putGexAbs: 0,
+                                callVex: 0, putVex: 0, 
+                                callVanna: 0, putVanna: 0, 
+                                totalOi: 0, shortGex: 0, midGex: 0, longGex: 0 
+                            };
                         }
 
                         strikes[k].totalOi += row.oi;
@@ -1205,12 +1230,14 @@
                         if (row.type === 'call') {
                             const val = dealerSign * gexVal;
                             strikes[k].callGex += val;
+                            strikes[k].callGexAbs += Math.abs(gexVal);
                             strikes[k].callVex += (dealerSign * vexVal);
                             strikes[k].callVanna += (dealerSign * vannaVal);
                             netGex = val;
                         } else {
                             const val = -dealerSign * gexVal;
                             strikes[k].putGex += val;
+                            strikes[k].putGexAbs += Math.abs(gexVal);
                             strikes[k].putVex += (dealerSign * vexVal);
                             strikes[k].putVanna += (dealerSign * vannaVal);
                             netGex = val;
@@ -1240,8 +1267,8 @@
                     AppState.processedStrikes = Object.values(strikes).sort((a, b) => a.strike - b.strike);
 
                     const walls = findWalls(AppState.processedStrikes);
-                    UI.elCallWall.textContent = walls.callWall;
-                    UI.elPutWall.textContent = walls.putWall;
+                    UI.elCallWall.textContent = walls.callWall !== null ? walls.callWall : '--';
+                    UI.elPutWall.textContent = walls.putWall !== null ? walls.putWall : '--';
                     UI.wallsPanel.classList.remove('hidden');
 
                     // Filter dataset for findFlip to only include contracts in that bucket
@@ -1254,8 +1281,8 @@
                     console.log(`[Flips] Short: ${shortFlip.val} (Str: ${shortFlip.strength}), Mid: ${midFlip.val}, Long: ${longFlip.val}`);
 
                     AppState.results = {
-                        callWall: walls.callWall,
-                        putWall: walls.putWall,
+                        callWall: walls.callWall !== null ? walls.callWall : 0,
+                        putWall: walls.putWall !== null ? walls.putWall : 0,
                         shortFlip: shortFlip.isNull ? 0 : shortFlip.val,
                         midFlip: midFlip.isNull ? 0 : midFlip.val,
                         longFlip: longFlip.isNull ? 0 : longFlip.val
