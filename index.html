@@ -1152,6 +1152,12 @@
                     const strikes = {};
                     let totalIv = 0;
                     let ivCount = 0;
+                    
+                    // Diagnostics
+                    let diagShortGex = 0;
+                    let diagMidGex = 0;
+                    let diagLongGex = 0;
+                    let diagSkipped = 0;
 
                     AppState.rawData.forEach(row => {
                         const k = row.strike;
@@ -1176,7 +1182,13 @@
                                 const diffTime = d.getTime() - marketDate.getTime();
                                 const diffDays = diffTime / (1000 * 60 * 60 * 24);
                                 
-                                dte = Math.max(0, diffDays);
+                                // FIX: Exclude expired contracts (Market Date > Expiration)
+                                if (diffDays < 0) {
+                                    diagSkipped++;
+                                    return; 
+                                }
+
+                                dte = diffDays;
                                 t = Math.max(0.001, dte / 365.0);
                             }
                         }
@@ -1204,11 +1216,26 @@
                             netGex = val;
                         }
 
-                        // Bucketing (Inclusive for 0DTE)
-                        if (dte < 7.0) strikes[k].shortGex += netGex;
-                        else if (dte < 21.0) strikes[k].midGex += netGex;
-                        else strikes[k].longGex += netGex;
+                        // Bucketing (Inclusive boundaries as per spec)
+                        // Short: 0-7 inclusive (Retains 0 DTE)
+                        if (dte <= 7.0) {
+                             strikes[k].shortGex += netGex;
+                             diagShortGex += netGex;
+                        }
+                        // Mid: >7 to 21 inclusive
+                        else if (dte <= 21.0) {
+                             strikes[k].midGex += netGex;
+                             diagMidGex += netGex;
+                        }
+                        // Long: >21
+                        else {
+                             strikes[k].longGex += netGex;
+                             diagLongGex += netGex;
+                        }
                     });
+
+                    console.log(`[DTE Audit] Skipped ${diagSkipped} expired contracts.`);
+                    console.log(`[Buckets] Short: ${formatLargeNumber(diagShortGex)}, Mid: ${formatLargeNumber(diagMidGex)}, Long: ${formatLargeNumber(diagLongGex)}`);
 
                     AppState.processedStrikes = Object.values(strikes).sort((a, b) => a.strike - b.strike);
 
@@ -1217,9 +1244,14 @@
                     UI.elPutWall.textContent = walls.putWall;
                     UI.wallsPanel.classList.remove('hidden');
 
-                    const shortFlip = findFlip(AppState.processedStrikes, 'shortGex');
-                    const midFlip = findFlip(AppState.processedStrikes, 'midGex');
-                    const longFlip = findFlip(AppState.processedStrikes, 'longGex');
+                    // Filter dataset for findFlip to only include contracts in that bucket
+                    const getBucketStrikes = (prop) => AppState.processedStrikes.filter(s => Math.abs(s[prop]) > 0.01);
+
+                    const shortFlip = findFlip(getBucketStrikes('shortGex'), 'shortGex');
+                    const midFlip = findFlip(getBucketStrikes('midGex'), 'midGex');
+                    const longFlip = findFlip(getBucketStrikes('longGex'), 'longGex');
+                    
+                    console.log(`[Flips] Short: ${shortFlip.val} (Str: ${shortFlip.strength}), Mid: ${midFlip.val}, Long: ${longFlip.val}`);
 
                     AppState.results = {
                         callWall: walls.callWall,
