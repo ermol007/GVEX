@@ -42,8 +42,18 @@ python -m http.server 8000
 - Supports Russian date formats (e.g., "21 ноября 2025 г.")
 
 **DIX CSV** (Squeezemetrics format):
-- Must contain columns: Date, DIX, Price
+- Must contain columns: Date, DIX, Price, GEX (optional)
 - Historical data recommended (60+ days for dynamic thresholds)
+- Parser now skips malformed rows and logs errors for debugging
+- Dates are normalized to midnight UTC for consistent comparison
+
+### DIX Trend Analysis (Enhanced)
+The DIX trend calculation has been improved with:
+- **Rolling slope analysis** using 3-5 recent records instead of circular average
+- **Neutral band** (±1% or ±2% relative) to prevent false flips on small changes
+- **Three-state output**: RISING (green) / NEUTRAL (amber) / FALLING (red)
+- **Comprehensive logging** showing dates, values, and slope calculations
+- **Hardened parsing** with explicit date normalization and numeric coercion
 
 ---
 
