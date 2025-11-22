@@ -471,6 +471,63 @@
         // --- Application State & Constants ---
         const CONTRACT_SIZE = 100;
         
+        // Defined UI globally to ensure access in all functions
+        const UI = {
+            spotInput: document.getElementById('spotPrice'),
+            dateInput: document.getElementById('marketDate'),
+            dealerToggle: document.getElementById('dealerNetShort'),
+            calcBtn: document.getElementById('calculateBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            status: document.getElementById('statusMessage'),
+            elShortFlip: document.getElementById('shortFlip'),
+            elMidFlip: document.getElementById('midFlip'),
+            elLongFlip: document.getElementById('longFlip'),
+            elShortStr: document.getElementById('shortFlipStrength'),
+            elMidStr: document.getElementById('midFlipStrength'),
+            elLongStr: document.getElementById('longFlipStrength'),
+            elCallWall: document.getElementById('callWall'),
+            elPutWall: document.getElementById('putWall'),
+            wallsPanel: document.getElementById('wallsPanel'),
+            elRegimePanel: document.getElementById('regimePanel'),
+            elRegime: document.getElementById('marketRegime'),
+            elRecContainer: document.getElementById('tradingRecommendationContainer'),
+            elDixTrend: document.getElementById('dixTrend'),
+            elDixLevels: document.getElementById('dixLevels'),
+            elPosBias: document.getElementById('positioningBias'),
+            
+            setStatus(msg, type = 'info') {
+                this.status.textContent = msg;
+                this.status.className = `text-[10px] text-center font-mono min-h-[15px] font-bold tracking-wide ${
+                    type === 'error' ? 'text-rose-400' : 
+                    type === 'success' ? 'text-emerald-400' : 'text-blue-400'
+                }`;
+            },
+
+            setLoading(isLoading) {
+                if (isLoading) {
+                    this.calcBtn.disabled = true;
+                    this.calcBtn.innerHTML = `<svg class="animate-spin h-4 w-4 inline mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>PROCESSING...`;
+                } else {
+                    this.calcBtn.disabled = false;
+                    this.calcBtn.innerHTML = 'INITIALIZE MODEL';
+                }
+            },
+            
+            renderStrategicPanel(regimeData) {
+                 // ... implementation handled in calc loop
+            },
+            
+            renderFlipStrength(element, level) {
+                let html = '';
+                for (let i=0; i<3; i++) {
+                    let cls = 'signal-bar';
+                    if (i < level) cls += level === 3 ? ' signal-strong' : ' signal-active';
+                    html += `<div class="${cls}"></div>`;
+                }
+                element.innerHTML = html;
+            }
+        };
+
         const AppState = {
             rawData: [],
             dixData: [],
@@ -724,91 +781,38 @@
 
         // --- UI Controller ---
         
-        const UI = {
+        // UI Helper Extensions for specific inputs
+        const UIHelper = {
             fileInput: document.getElementById('csvFile'),
             fileDisplay: document.getElementById('fileNameDisplay'),
             dixInput: document.getElementById('dixFile'),
             dixStatus: document.getElementById('dixStatus'),
-            spotInput: document.getElementById('spotPrice'),
-            dateInput: document.getElementById('marketDate'),
-            dealerToggle: document.getElementById('dealerNetShort'),
-            
-            calcBtn: document.getElementById('calculateBtn'),
             sampleBtn: document.getElementById('sampleBtn'),
-            exportBtn: document.getElementById('exportBtn'),
-            status: document.getElementById('statusMessage'),
+        };
+
+        // Update UI.renderStrategicPanel implementation
+        UI.renderStrategicPanel = function(regimeData) {
+            this.elRegime.textContent = regimeData.regime;
+            this.elRegime.className = `text-4xl font-black font-mono tracking-tight ${regimeData.color}`;
             
-            elRegimePanel: document.getElementById('regimePanel'),
-            elRegime: document.getElementById('marketRegime'),
-            elRecContainer: document.getElementById('tradingRecommendationContainer'),
-            elDixTrend: document.getElementById('dixTrend'),
-            elDixLevels: document.getElementById('dixLevels'),
-            elPosBias: document.getElementById('positioningBias'),
+            const borderColor = regimeData.color.includes('rose') ? 'border-l-rose-500' : 
+                                regimeData.color.includes('emerald') ? 'border-l-emerald-500' : 
+                                regimeData.color.includes('cyan') ? 'border-l-cyan-500' : 
+                                regimeData.color.includes('amber') ? 'border-l-amber-500' : 'border-l-slate-700';
+                                
+            this.elRegimePanel.className = `glass-panel rounded-2xl p-6 relative overflow-hidden border-l-4 transition-colors duration-500 ${borderColor}`;
+
+            this.elRecContainer.innerHTML = `
+                <div class="space-y-2 animate-entry">
+                    <p class="text-slate-300"><span class="text-slate-500 uppercase text-xs font-bold tracking-wider mr-2">Action:</span> ${regimeData.rec}</p>
+                </div>
+            `;
             
-            elShortFlip: document.getElementById('shortFlip'),
-            elMidFlip: document.getElementById('midFlip'),
-            elLongFlip: document.getElementById('longFlip'),
-            elShortStr: document.getElementById('shortFlipStrength'),
-            elMidStr: document.getElementById('midFlipStrength'),
-            elLongStr: document.getElementById('longFlipStrength'),
-
-            elCallWall: document.getElementById('callWall'),
-            elPutWall: document.getElementById('putWall'),
-            wallsPanel: document.getElementById('wallsPanel'),
-            
-            dataStatus: document.createElement('div'), // virtual for logic
-
-            setStatus(msg, type = 'info') {
-                this.status.textContent = msg;
-                this.status.className = `text-[10px] text-center font-mono min-h-[15px] font-bold tracking-wide ${
-                    type === 'error' ? 'text-rose-400' : 
-                    type === 'success' ? 'text-emerald-400' : 'text-blue-400'
-                }`;
-            },
-
-            setLoading(isLoading) {
-                if (isLoading) {
-                    this.calcBtn.disabled = true;
-                    this.calcBtn.innerHTML = `<svg class="animate-spin h-4 w-4 inline mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>PROCESSING...`;
-                } else {
-                    this.calcBtn.disabled = false;
-                    this.calcBtn.innerHTML = 'INITIALIZE MODEL';
-                }
-            },
-
-            renderStrategicPanel(regimeData) {
-                this.elRegime.textContent = regimeData.regime;
-                this.elRegime.className = `text-4xl font-black font-mono tracking-tight ${regimeData.color}`;
-                
-                const borderColor = regimeData.color.includes('rose') ? 'border-l-rose-500' : 
-                                    regimeData.color.includes('emerald') ? 'border-l-emerald-500' : 
-                                    regimeData.color.includes('cyan') ? 'border-l-cyan-500' : 
-                                    regimeData.color.includes('amber') ? 'border-l-amber-500' : 'border-l-slate-700';
-                                    
-                this.elRegimePanel.className = `glass-panel rounded-2xl p-6 relative overflow-hidden border-l-4 transition-colors duration-500 ${borderColor}`;
-
-                this.elRecContainer.innerHTML = `
-                    <div class="space-y-2 animate-entry">
-                        <p class="text-slate-300"><span class="text-slate-500 uppercase text-xs font-bold tracking-wider mr-2">Action:</span> ${regimeData.rec}</p>
-                    </div>
-                `;
-                
-                let biasColor = 'text-slate-300';
-                if (regimeData.bias.includes('BULLISH')) biasColor = 'text-emerald-400';
-                if (regimeData.bias.includes('BEARISH')) biasColor = 'text-rose-400';
-                this.elPosBias.textContent = regimeData.bias;
-                this.elPosBias.className = `text-lg font-bold font-mono mt-1 ${biasColor}`;
-            },
-
-            renderFlipStrength(element, level) {
-                let html = '';
-                for (let i=0; i<3; i++) {
-                    let cls = 'signal-bar';
-                    if (i < level) cls += level === 3 ? ' signal-strong' : ' signal-active';
-                    html += `<div class="${cls}"></div>`;
-                }
-                element.innerHTML = html;
-            }
+            let biasColor = 'text-slate-300';
+            if (regimeData.bias.includes('BULLISH')) biasColor = 'text-emerald-400';
+            if (regimeData.bias.includes('BEARISH')) biasColor = 'text-rose-400';
+            this.elPosBias.textContent = regimeData.bias;
+            this.elPosBias.className = `text-lg font-bold font-mono mt-1 ${biasColor}`;
         };
 
         // --- Calculation Utilities ---
@@ -1290,10 +1294,10 @@
 
         // --- Event Wiring ---
 
-        UI.fileInput.addEventListener('change', (e) => {
+        UIHelper.fileInput.addEventListener('change', (e) => {
             if(e.target.files.length > 0) {
-                UI.fileDisplay.textContent = e.target.files[0].name;
-                UI.fileDisplay.classList.add('text-white');
+                UIHelper.fileDisplay.textContent = e.target.files[0].name;
+                UIHelper.fileDisplay.classList.add('text-white');
                 
                 Papa.parse(e.target.files[0], {
                     header: false, skipEmptyLines: 'greedy',
@@ -1309,7 +1313,7 @@
             }
         });
 
-        UI.dixInput.addEventListener('change', (e) => {
+        UIHelper.dixInput.addEventListener('change', (e) => {
             if(e.target.files.length > 0) {
                 DIXDataManager.parse(e.target.files[0]);
             }
@@ -1323,11 +1327,14 @@
             const r = AppState.results;
             const dateStr = UI.dateInput.value;
             
-            const cWall = Math.round(r.callWall);
-            const pWall = Math.round(r.putWall);
-            const sFlip = Math.round(r.shortFlip);
-            const mFlip = Math.round(r.midFlip);
-            const lFlip = Math.round(r.longFlip);
+            // Helper to safeguard copy values
+            const safe = (val) => (typeof val === 'number' && !isNaN(val)) ? Math.round(val) : 0;
+
+            const cWall = safe(r.callWall);
+            const pWall = safe(r.putWall);
+            const sFlip = safe(r.shortFlip);
+            const mFlip = safe(r.midFlip);
+            const lFlip = safe(r.longFlip);
 
             const payload = `QUANTFLOW:${cWall},${pWall},${sFlip},${mFlip},${lFlip}:${dateStr}`;
 
@@ -1340,11 +1347,12 @@
                 setTimeout(() => {
                     btn.innerHTML = originalHTML;
                     btn.classList.remove('border-emerald-500/50');
+                    btn.classList.remove('border-emerald-500/50');
                 }, 2500);
             });
         });
 
-        UI.sampleBtn.addEventListener('click', () => {
+        UIHelper.sampleBtn.addEventListener('click', () => {
             const demoDate = new Date();
             UI.dateInput.value = demoDate.toISOString().split('T')[0];
             UI.spotInput.value = 4500;
@@ -1390,42 +1398,52 @@
             runCalculations();
         });
 
-        UI.tabs.forEach(btn => {
+        // --- Tab Logic Fixed ---
+        const tabButtons = document.querySelectorAll('[data-tab]');
+        const tabPanels = {
+            horizon: document.getElementById('tab-horizon'),
+            greeks: document.getElementById('tab-greeks'),
+            data: document.getElementById('tab-data')
+        };
+
+        tabButtons.forEach(btn => {
             btn.addEventListener('click', () => {
-                UI.tabs.forEach(b => {
+                // 1. Update Button Styles
+                tabButtons.forEach(b => {
                     b.classList.remove('text-cyan-400', 'border-cyan-400');
                     b.classList.add('text-slate-500', 'border-transparent');
                 });
-                btn.classList.add('text-cyan-400', 'border-cyan-400');
                 btn.classList.remove('text-slate-500', 'border-transparent');
+                btn.classList.add('text-cyan-400', 'border-cyan-400');
                 
-                const tabId = btn.dataset.tab;
-                Object.values(UI.tabContents).forEach(el => {
-                    el.classList.remove('block');
-                    el.classList.add('hidden');
-                    el.style.display = 'none'; 
+                // 2. Toggle Panels
+                const targetId = btn.dataset.tab;
+                
+                // Hide all
+                Object.values(tabPanels).forEach(p => {
+                    if(p) {
+                        p.classList.add('hidden');
+                        p.style.display = 'none'; // Explicit force hide
+                    }
                 });
-                const target = UI.tabContents[tabId];
-                target.classList.remove('hidden');
-                target.classList.add('block');
-                target.style.display = 'block'; 
-                
-                if (AppState.processedStrikes.length > 0) {
-                    setTimeout(() => {
-                        window.dispatchEvent(new Event('resize'));
-                        renderCharts();
-                    }, 50);
+
+                // Show target
+                const targetPanel = tabPanels[targetId];
+                if(targetPanel) {
+                    targetPanel.classList.remove('hidden');
+                    targetPanel.style.display = 'block'; // Explicit force show
+                    
+                    // 3. Refresh Charts (Critical for Plotly in tabs)
+                    if (AppState.processedStrikes.length > 0) {
+                        setTimeout(() => {
+                            window.dispatchEvent(new Event('resize'));
+                            // Re-render specifically if switching to greeks to ensure they appear
+                            if (targetId === 'greeks') renderCharts(); 
+                        }, 50);
+                    }
                 }
             });
         });
-        
-        // Init Tabs ref
-        UI.tabs = document.querySelectorAll('[data-tab]');
-        UI.tabContents = {
-             horizon: document.getElementById('tab-horizon'),
-             greeks: document.getElementById('tab-greeks'),
-             data: document.getElementById('tab-data')
-        };
 
         window.addEventListener('resize', debounce(() => {
              ['horizonChart', 'cumGexChart', 'gexChart', 'vexChart', 'vannaChart'].forEach(id => {
