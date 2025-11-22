@@ -603,34 +603,80 @@
         const DIXDataManager = {
             parse(file) {
                 UI.setStatus("Parsing DIX...", "info");
+                console.log('[DIX] Starting parse operation...');
+                
                 Papa.parse(file, {
                     header: true,
                     skipEmptyLines: 'greedy',
                     complete: (results) => {
                         try {
                             const raw = results.data;
-                            AppState.dixData = raw.map(row => {
-                                const r = {};
-                                Object.keys(row).forEach(k => r[k.toLowerCase().trim()] = row[k]);
-                                if (!r.date || !r.dix) return null;
-                                const d = new Date(r.date);
-                                if (isNaN(d.getTime())) return null;
-                                return {
-                                    date: d,
-                                    dix: parseFloat(r.dix),
-                                    price: parseFloat(r.price)
-                                };
-                            }).filter(d => d && !isNaN(d.dix));
+                            let skippedCount = 0;
+                            let parsedCount = 0;
+                            
+                            console.log(`[DIX] Raw rows received: ${raw.length}`);
+                            
+                            AppState.dixData = raw.map((row, idx) => {
+                                try {
+                                    const r = {};
+                                    Object.keys(row).forEach(k => r[k.toLowerCase().trim()] = row[k]);
+                                    
+                                    if (!r.date || !r.dix) {
+                                        skippedCount++;
+                                        if (idx < 5) console.log(`[DIX] Row ${idx} skipped: missing date or dix`, r);
+                                        return null;
+                                    }
+                                    
+                                    const d = new Date(r.date);
+                                    if (isNaN(d.getTime())) {
+                                        skippedCount++;
+                                        console.log(`[DIX] Row ${idx} skipped: invalid date "${r.date}"`);
+                                        return null;
+                                    }
+                                    
+                                    d.setHours(0, 0, 0, 0);
+                                    
+                                    const dixVal = parseFloat(r.dix);
+                                    if (isNaN(dixVal)) {
+                                        skippedCount++;
+                                        console.log(`[DIX] Row ${idx} skipped: invalid DIX value "${r.dix}"`);
+                                        return null;
+                                    }
+                                    
+                                    const priceVal = r.price ? parseFloat(r.price) : 0;
+                                    const gexVal = r.gex ? parseFloat(r.gex) : 0;
+                                    
+                                    parsedCount++;
+                                    return {
+                                        date: d,
+                                        dix: dixVal,
+                                        price: isNaN(priceVal) ? 0 : priceVal,
+                                        gex: isNaN(gexVal) ? 0 : gexVal
+                                    };
+                                } catch (err) {
+                                    skippedCount++;
+                                    console.warn(`[DIX] Row ${idx} parse error:`, err.message, row);
+                                    return null;
+                                }
+                            }).filter(d => d !== null);
                             
                             AppState.dixData.sort((a, b) => a.date - b.date);
                             
                             const count = AppState.dixData.length;
+                            console.log(`[DIX] Parse complete: ${parsedCount} valid, ${skippedCount} skipped, ${count} total loaded`);
+                            
+                            if (count > 0) {
+                                const firstDate = AppState.dixData[0].date.toISOString().split('T')[0];
+                                const lastDate = AppState.dixData[count-1].date.toISOString().split('T')[0];
+                                console.log(`[DIX] Date range: ${firstDate} to ${lastDate}`);
+                            }
+                            
                             UI.dixStatus.textContent = `READY (${count} RECS)`;
                             UI.dixStatus.className = "text-[10px] font-mono text-emerald-400 font-bold";
                             UI.setStatus("DIX Data Loaded", "success");
                             
                         } catch (e) {
-                            console.error(e);
+                            console.error('[DIX] Fatal parse error:', e);
                             UI.setStatus("DIX Parse Error", "error");
                         }
                     }
@@ -675,16 +721,65 @@
             },
 
             getTrend(targetDate) {
-                if (!AppState.dixData || AppState.dixData.length < 3) return "N/A";
+                if (!AppState.dixData || AppState.dixData.length < 5) {
+                    console.log('[DIX Trend] Insufficient data (need at least 5 records)');
+                    return { label: "N/A", color: "text-slate-500" };
+                }
+                
                 const rec = this.getRecordForDate(targetDate);
-                if (!rec) return "N/A";
+                if (!rec) {
+                    console.log('[DIX Trend] No record found for target date');
+                    return { label: "N/A", color: "text-slate-500" };
+                }
+                
                 const idx = AppState.dixData.indexOf(rec);
-                if (idx < 2) return "N/A";
-                const d0 = AppState.dixData[idx].dix;
-                const d1 = AppState.dixData[idx-1].dix;
-                const d2 = AppState.dixData[idx-2].dix;
-                const avg = (d0 + d1 + d2) / 3;
-                return d0 > avg ? "RISING" : "FALLING";
+                if (idx < 4) {
+                    console.log('[DIX Trend] Insufficient historical data (need 4 prior records)');
+                    return { label: "N/A", color: "text-slate-500" };
+                }
+                
+                const lookback = Math.min(5, idx + 1);
+                const recentRecords = [];
+                for (let i = 0; i < lookback; i++) {
+                    recentRecords.unshift(AppState.dixData[idx - i]);
+                }
+                
+                console.log('[DIX Trend] Analyzing trend using records:');
+                recentRecords.forEach((r, i) => {
+                    console.log(`  [${i}] ${r.date.toISOString().split('T')[0]}: DIX=${r.dix.toFixed(4)}`);
+                });
+                
+                const slopes = [];
+                for (let i = 1; i < recentRecords.length; i++) {
+                    const delta = recentRecords[i].dix - recentRecords[i-1].dix;
+                    slopes.push(delta);
+                }
+                
+                const avgSlope = slopes.reduce((sum, s) => sum + s, 0) / slopes.length;
+                
+                const currentDix = recentRecords[recentRecords.length - 1].dix;
+                const neutralBandAbs = 0.01;
+                const neutralBandPct = currentDix * 0.02;
+                const neutralBand = Math.max(neutralBandAbs, neutralBandPct);
+                
+                console.log(`[DIX Trend] Average slope: ${avgSlope.toFixed(6)}, Neutral band: ±${neutralBand.toFixed(4)}`);
+                
+                let label, color;
+                if (avgSlope > neutralBand) {
+                    label = "RISING";
+                    color = "text-emerald-400";
+                    console.log('[DIX Trend] Result: RISING (positive slope exceeds neutral band)');
+                } else if (avgSlope < -neutralBand) {
+                    label = "FALLING";
+                    color = "text-rose-400";
+                    console.log('[DIX Trend] Result: FALLING (negative slope exceeds neutral band)');
+                } else {
+                    label = "NEUTRAL";
+                    color = "text-amber-400";
+                    console.log('[DIX Trend] Result: NEUTRAL (slope within neutral band)');
+                }
+                
+                return { label, color };
             }
         };
 
@@ -1046,7 +1141,10 @@
                     
                     const dixRecord = DIXDataManager.getRecordForDate(marketDate);
                     if(dixRecord) {
-                         UI.elDixTrend.textContent = DIXDataManager.getTrend(marketDate);
+                         const trendResult = DIXDataManager.getTrend(marketDate);
+                         UI.elDixTrend.textContent = trendResult.label;
+                         UI.elDixTrend.className = `text-lg font-bold font-mono mt-1 ${trendResult.color}`;
+                         
                          const dixThresholds = DIXDataManager.getDynamicThresholds(marketDate);
                          UI.elDixLevels.textContent = `Bear: ${dixThresholds.bearish.toFixed(2)} / Bull: ${dixThresholds.bullish.toFixed(2)}`;
                     }
