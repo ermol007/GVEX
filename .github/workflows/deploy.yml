@@ -1,11 +1,11 @@
-name: Deploy QuantFlow to GitHub Pages
+name: Deploy GVEX to GitHub Pages
 
 on:
   push:
     branches:
       - main
       - master
-      - feat/deploy-quantflow-gh-pages
+      - deploy-gvex-gh-pages
   workflow_dispatch:
 
 permissions:
