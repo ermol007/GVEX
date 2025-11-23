@@ -952,9 +952,13 @@
             const d2 = d1 - v * sqrtT;
             const pdf = Math.exp(-(d1 * d1) / 2) / Math.sqrt(2 * Math.PI);
             
+            // Vega: Sensitivity to 1% volatility change (scaled by 0.01)
             const vega = S * sqrtT * pdf * 0.01; 
-            const denom = v * sqrtT;
-            const vanna = denom > 0.002 ? (vega * (1 - d1 * d2) / denom) : 0;
+            
+            // Vanna: Sensitivity of Delta to Volatility (dDelta/dVol) or Vega to Spot (dVega/dSpot)
+            // Standard formula: -pdf(d1) * d2 / sigma
+            // Scaled by 0.01 to represent change per 1% vol shift
+            const vanna = (-pdf * d2 / v) * 0.01;
             
             return { d1, d2, vega, vanna };
         }
@@ -1251,10 +1255,19 @@
                         const iv = normalizeIV(row.iv);
                         if (dte <= 45) { totalIv += iv*100; ivCount++; }
 
-                        const gexVal = row.gamma * row.oi * CONTRACT_SIZE * (spotPrice * spotPrice) * 0.01;
+                        // Guard against bad calculations
+                        if (spotPrice <= 0 || isNaN(iv)) return;
+
+                        let gexVal = row.gamma * row.oi * CONTRACT_SIZE * (spotPrice * spotPrice) * 0.01;
+                        if (isNaN(gexVal)) gexVal = 0;
+
                         const bs = calculateBS(spotPrice, k, t, iv, 0.04, 0.015); 
-                        const vexVal = bs.vega * row.oi * CONTRACT_SIZE;
-                        const vannaVal = bs.vanna * row.oi * CONTRACT_SIZE * spotPrice;
+                        
+                        let vexVal = bs.vega * row.oi * CONTRACT_SIZE;
+                        if (isNaN(vexVal)) vexVal = 0;
+
+                        let vannaVal = bs.vanna * row.oi * CONTRACT_SIZE * spotPrice;
+                        if (isNaN(vannaVal)) vannaVal = 0;
 
                         let netGex = 0;
                         if (row.type === 'call') {
@@ -1265,7 +1278,10 @@
                             strikes[k].callVanna += (dealerSign * vannaVal);
                             netGex = val;
                         } else {
-                            const val = -dealerSign * gexVal;
+                            // Fix: Use consistent sign for Puts. 
+                            // If Dealer Net Short (-1) -> Short Put (Negative Gamma).
+                            // Removing the flip (-dealerSign) so it adheres to dealerSign logic.
+                            const val = dealerSign * gexVal;
                             strikes[k].putGex += val;
                             strikes[k].putGexAbs += Math.abs(gexVal);
                             strikes[k].putVex += (dealerSign * vexVal);
@@ -1292,9 +1308,27 @@
                     });
 
                     console.log(`[DTE Audit] Skipped ${diagSkipped} expired contracts.`);
-                    console.log(`[Buckets] Short: ${formatLargeNumber(diagShortGex)}, Mid: ${formatLargeNumber(diagMidGex)}, Long: ${formatLargeNumber(diagLongGex)}`);
-
+                    
                     AppState.processedStrikes = Object.values(strikes).sort((a, b) => a.strike - b.strike);
+
+                    // AUDIT SUMMARIES
+                    console.log(`[Audit] Total Short Gamma: ${formatLargeNumber(diagShortGex)}`);
+                    console.log(`[Audit] Total Mid Gamma: ${formatLargeNumber(diagMidGex)}`);
+                    console.log(`[Audit] Total Long Gamma: ${formatLargeNumber(diagLongGex)}`);
+                    
+                    // Cumulative GEX Range
+                    let minCum = 0, maxCum = 0, currentCum = 0;
+                    AppState.processedStrikes.forEach(s => {
+                        currentCum += (s.callGex + s.putGex);
+                        if (currentCum < minCum) minCum = currentCum;
+                        if (currentCum > maxCum) maxCum = currentCum;
+                    });
+                    console.log(`[Audit] Cumulative GEX Range: ${formatLargeNumber(minCum)} to ${formatLargeNumber(maxCum)}`);
+
+                    // Top Strikes
+                    const topGexStrikes = AppState.processedStrikes.slice().sort((a,b) => (b.callGexAbs + b.putGexAbs) - (a.callGexAbs + a.putGexAbs)).slice(0, 5);
+                    console.log('[Audit] Top 5 Strikes by Abs Gamma:');
+                    topGexStrikes.forEach(s => console.log(`  > Strike ${s.strike}: ${formatLargeNumber(s.callGex + s.putGex)} Net GEX`));
 
                     const walls = findWalls(AppState.processedStrikes);
                     UI.elCallWall.textContent = walls.callWall !== null ? walls.callWall : '--';
